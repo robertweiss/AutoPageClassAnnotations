@@ -201,7 +201,7 @@ class AutoPageClassAnnotations extends WireData implements Module {
     protected function generatePageClassAnnotation(Template $template): void {
         $className = ucfirst($this->wire()->sanitizer->camelCase($template->name)) . 'Page';
 
-        $annotations = " * \n";
+        $annotations = " *\n";
         $templateName = $template->name;
         if ($template->label) {
             $templateName .= " ($template->label)";
