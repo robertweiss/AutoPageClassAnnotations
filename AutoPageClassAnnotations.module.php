@@ -242,6 +242,10 @@ class AutoPageClassAnnotations extends WireData implements Module {
     protected function createPageClassFile(string $className, Template $template): void {
         $filePath = config()->paths()->classes . $className . '.php';
         $fileContent = "<?php namespace ProcessWire;\n\n";
+        $use_strict_preamble = (bool) ($this->wire()->config->AutoPageClassAnnotationsStrictPreamble ?? false);
+        if ($use_strict_preamble) {
+            $fileContent = "<?php declare(strict_types=1);\n\nnamespace ProcessWire;\n\n";
+        }
         $baseClassName = 'Page';
         if ($template->pageClass !== '') {
             $baseClassName = $template->pageClass;
