@@ -245,13 +245,10 @@ class AutoPageClassAnnotations extends WireData implements Module {
         $baseClassName = 'Page';
         if ($template->pageClass !== '') {
             $baseClassName = $template->pageClass;
-            ray($baseClassName);
         }
         if (explode('_', $template->name)[0] === 'repeater') {
             $baseClassName = 'RepeaterPage';
-            ray($baseClassName);
         }
-        ray($baseClassName);
         $fileContent .= 'class ' . $className . ' extends ' . $baseClassName . ' {}';
         $this->wire()->files->filePutContents($filePath, $fileContent);
     }
