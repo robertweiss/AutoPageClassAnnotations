@@ -201,7 +201,7 @@ class AutoPageClassAnnotations extends WireData implements Module {
     protected function generatePageClassAnnotation(Template $template): void {
         $className = ucfirst($this->wire()->sanitizer->camelCase($template->name)) . 'Page';
 
-        $annotations = " * \n";
+        $annotations = " *\n";
         $templateName = $template->name;
         if ($template->label) {
             $templateName .= " ($template->label)";
@@ -261,10 +261,10 @@ class AutoPageClassAnnotations extends WireData implements Module {
         $regex = '/\/\*\* @AutoPageClassAnnotations[\s\S]*? \* @AutoPageClassAnnotations \*\//';
         // If not existing, find namespace line instead and append wrapper with annotations
         if (!preg_match($regex, $oldContent)) {
-            $regex = '/<\?php namespace ProcessWire;\R+/';
-            $annotationsWithWrapper = "<?php namespace ProcessWire;\n\n" . $annotationsWithWrapper . "\n\n";
+            $regex = '/namespace ProcessWire;\R+/';
+            $annotationsWithWrapper = "namespace ProcessWire;\n\n" . $annotationsWithWrapper . "\n\n";
         }
-        $newContent = preg_replace($regex, $annotationsWithWrapper, $oldContent);
+        $newContent = preg_replace($regex, $annotationsWithWrapper, $oldContent, 1);
 
         return $newContent;
     }
