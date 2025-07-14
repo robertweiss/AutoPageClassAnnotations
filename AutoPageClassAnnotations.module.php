@@ -9,7 +9,7 @@ class AutoPageClassAnnotations extends WireData implements Module {
             'title' => 'Auto Page Class Annotations',
             'summary' =>
                 'Automatically adds PHPDoc Annotations for custom page classes when fields or fieldgroups are saved. Heavily based on AutoTemplateStubs by Robin Sallis',
-            'version' => '0.0.2',
+            'version' => '0.2.0',
             'author' => 'Robert Weiss',
             'href' => '',
             'icon' => 'code',
