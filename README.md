@@ -18,6 +18,9 @@ class files with accurate type information.
 - **🛡️ Safe Overwriting**: Only replaces annotation blocks, preserving your custom code
 - **🔧 Smart Type Detection**: Maps ProcessWire fieldtypes to appropriate PHP types
 - **📁 Complete Coverage**: Supports regular templates, repeater fields, and repeater matrix fields
+- **🏗️ RockPageBuilder Support**: Full integration with RockPageBuilder Block classes
+- **💡 IDE Optimized**: Places annotations immediately before class declarations for perfect IDE compatibility
+- **🔒 Duplicate Prevention**: Robust regex patterns prevent duplicate annotation blocks
 - **⚙️ Flexible Configuration**: Optional strict types support and namespace handling
 
 ## IDE Benefits & Developer Experience
@@ -99,12 +102,54 @@ class EventPage extends Page {
 | `FieldtypeRepeater`   | `RepeaterPageArray`           | `@property RepeaterPageArray $slides`     |
 | `FieldtypeOptions`    | `SelectableOptionArray`       | `@property SelectableOptionArray $status` |
 
+## RockPageBuilder Integration
+
+The module provides seamless support for *
+*[RockPageBuilder](https://www.baumrock.com/en/processwire/modules/rockpagebuilder/) Block classes**:
+
+### Automatic Detection
+
+- Detects templates starting with `rockpagebuilderblock-`
+- Updates real Block implementations, not stub files
+
+### Real File Locations
+
+```
+Template: rockpagebuilderblock-events
+↓
+Updates: /site/templates/RockPageBuilder/blocks/Events/Events.php
+↓
+Class: class Events extends Block
+```
+
+### Example RockPageBuilder Block
+
+```php
+<?php namespace RockPageBuilderBlock;
+
+use RockPageBuilder\Block;
+
+/** @AutoPageClassAnnotations
+ * Template: rockpagebuilderblock-events
+ * @property string $title Title
+ * @property PageArray $events Linked Events
+ * @AutoPageClassAnnotations */
+
+class Events extends Block {
+    // Your Block methods - fully preserved!
+    
+    public function getLabel() {
+        return $this->events->implode(', ', 'title');
+    }
+}
+```
+
 ## File Structure Support
 
-- ✅ Standard files: `<?php namespace ProcessWire;`
-- ✅ Strict types: `<?php declare(strict_types=1); namespace ProcessWire;`
-- ✅ RockPageBuilder: `<?php` (no namespace)
-- ✅ Mixed formats: Any combination of the above
+- ✅ **ProcessWire Pages**: `<?php namespace ProcessWire;` → `/site/classes/`
+- ✅ **Strict Types**: `<?php declare(strict_types=1); namespace ProcessWire;`
+- ✅ **RockPageBuilder Blocks**: `<?php namespace RockPageBuilderBlock;` → `/site/templates/RockPageBuilder/blocks/`
+- ✅ **Mixed formats**: Any combination of the above
 
 ## Installation & Configuration
 

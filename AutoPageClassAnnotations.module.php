@@ -9,7 +9,7 @@ class AutoPageClassAnnotations extends WireData implements Module {
             'title' => 'Auto Page Class Annotations',
             'summary' =>
                 'Automatically adds PHPDoc Annotations for custom page classes when fields or fieldgroups are saved. Heavily based on AutoTemplateStubs by Robin Sallis',
-            'version' => '0.2.0',
+            'version' => '0.3.0',
             'author' => 'Robert Weiss',
             'href' => '',
             'icon' => 'code',
@@ -221,7 +221,7 @@ class AutoPageClassAnnotations extends WireData implements Module {
             $this->handleRockPageBuilderAnnotation($template);
             return;
         }
-        
+
         $classNameSuffix = 'Page';
         $className = $template->name;
         if (str_starts_with($template->name, 'repeater')) {
@@ -234,7 +234,7 @@ class AutoPageClassAnnotations extends WireData implements Module {
         $annotationData = $this->buildAnnotationsContent($template);
         $annotations = $annotationData['annotations'];
         $isRepeaterMatrixPage = $annotationData['isRepeaterMatrix'];
-        
+
         // Handle RepeaterMatrix class name correction
         if ($isRepeaterMatrixPage) {
             $className = str_replace('RepeaterPage', 'RepeaterMatrixPage', $className);
@@ -340,25 +340,25 @@ class AutoPageClassAnnotations extends WireData implements Module {
 
     /**
      * Insert new annotations immediately before the Page or Block class declaration
-     * @param string $content                Original file content  
+     * @param string $content Original file content
      * @param string $annotationsWithWrapper Annotation block to insert
      * @return string Updated content with annotations, or original content if no class found
      */
     private function insertNewAnnotations(string $content, string $annotationsWithWrapper): string {
         // Find class extending *Page and insert annotations immediately before it
-        // Matches: (optional abstract/final) class SomeName extends SomePage/Page { 
+        // Matches: (optional abstract/final) class SomeName extends SomePage/Page {
         if (preg_match(self::REGEX_PAGE_CLASS, $content)) {
             $replacement = '$1' . $annotationsWithWrapper . "\n\n" . '$1$2';
             return preg_replace(self::REGEX_PAGE_CLASS, $replacement, $content, 1) ?? $content;
         }
-        
+
         // Find class extending Block (RockPageBuilder) and insert annotations immediately before it
         // Matches: (optional abstract/final) class SomeName extends Block {
         if (preg_match(self::REGEX_BLOCK_CLASS, $content)) {
             $replacement = '$1' . $annotationsWithWrapper . "\n\n" . '$1$2';
             return preg_replace(self::REGEX_BLOCK_CLASS, $replacement, $content, 1) ?? $content;
         }
-        
+
         // If no Page or Block class found, return original content unchanged
         return $content;
     }
@@ -375,7 +375,7 @@ class AutoPageClassAnnotations extends WireData implements Module {
             $templateName .= " ($template->label)";
         }
         $annotations .= ' * Template: ' . $templateName;
-        
+
         $isRepeaterMatrixPage = false;
         foreach ($template->fields as $field) {
             if (in_array((string) $field->type, $this->skipFieldtypes)) {
@@ -383,14 +383,14 @@ class AutoPageClassAnnotations extends WireData implements Module {
             }
             $fieldInfo = $this->buildFieldAnnotation($field, $template);
             $annotations .= "\n * @property {$fieldInfo['returns']} \${$field->name} {$fieldInfo['label']}";
-            
+
             // Check if the template is of base class RepeaterMatrix
             if ($field->name === 'repeater_matrix_type') {
                 $isRepeaterMatrixPage = true;
             }
         }
         $annotations .= "\n *";
-        
+
         return [
             'annotations' => $annotations,
             'isRepeaterMatrix' => $isRepeaterMatrixPage
@@ -406,14 +406,14 @@ class AutoPageClassAnnotations extends WireData implements Module {
         // Extract block name from template name (rockpagebuilderblock-eventuals -> Eventuals)
         $blockName = str_replace('rockpagebuilderblock-', '', $template->name);
         $className = ucfirst($this->wire()->sanitizer->camelCase($blockName));
-        
+
         // Build annotations using shared method
         $annotationData = $this->buildAnnotationsContent($template);
         $annotations = $annotationData['annotations'];
 
         // Find the real Block class file in RockPageBuilder structure
         $blockFilePath = $this->wire()->config->paths()->templates . "RockPageBuilder/blocks/{$className}/{$className}.php";
-        
+
         if (is_file($blockFilePath)) {
             $fileContent = $this->wire()->files->fileGetContents($blockFilePath);
             if ($fileContent !== false) {
