@@ -199,9 +199,15 @@ class AutoPageClassAnnotations extends WireData implements Module {
     }
 
     protected function generatePageClassAnnotation(Template $template): void {
-        $className = ucfirst($this->wire()->sanitizer->camelCase($template->name)) . 'Page';
+        $classNameSuffix = 'Page';
+        $className = $template->name;
+        if (str_starts_with($template->name, 'repeater')) {
+            $classNameSuffix = 'RepeaterPage';
+            $className = str_replace('repeater_', '', $className);
+        }
+        $className = ucfirst($this->wire()->sanitizer->camelCase($className)) . $classNameSuffix;
 
-        $annotations = " *\n";
+        $annotations = " * \n";
         $templateName = $template->name;
         if ($template->label) {
             $templateName .= " ($template->label)";
@@ -218,6 +224,7 @@ class AutoPageClassAnnotations extends WireData implements Module {
             // check if it has a field named repeater_matrix_type
             if ($field->name === 'repeater_matrix_type') {
                 $isRepeaterMatrixPage = true;
+                $className = str_replace('RepeaterPage', 'RepeaterMatrixPage', $className);
             }
         }
         $annotations .= "\n *";
@@ -241,7 +248,8 @@ class AutoPageClassAnnotations extends WireData implements Module {
 
     protected function createPageClassFile(string $className, Template $template): void {
         $filePath = config()->paths()->classes . $className . '.php';
-        $fileContent = "<?php namespace ProcessWire;\n\n";
+        $fileContent = "<?php";
+        $fileContent.= (!str_contains($className, 'Rockpagebuilder')) ? " namespace ProcessWire;\n\n" : "\n\n";
         $baseClassName = 'Page';
         if ($template->pageClass !== '') {
             $baseClassName = $template->pageClass;
