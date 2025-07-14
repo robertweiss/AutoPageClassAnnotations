@@ -45,11 +45,8 @@ class AutoPageClassAnnotations extends WireData implements Module {
     /**
      * Regex patterns for annotation insertion
      */
-    private const REGEX_EXISTING_ANNOTATIONS = '/\/\*\* @AutoPageClassAnnotations[\s\S]*? \* @AutoPageClassAnnotations \*\//';
-    private const REGEX_NAMESPACE = '/namespace ProcessWire;\s*\n+/';
-    private const REGEX_STRICT_TYPES = '/(<\?php\s+declare\(strict_types=1\);\s*\n+)/';
-    private const REGEX_PHP_OPENING = '/(<\?php\s*\n+)(.*)/s';
-    private const REGEX_PHP_FALLBACK = '/(<\?php\s*)/';
+    private const REGEX_EXISTING_ANNOTATIONS = '/\/\*\* @AutoPageClassAnnotations[\s\S]*?\* @AutoPageClassAnnotations\s*\*\//s';
+    private const REGEX_PAGE_CLASS = '/^(\s*)((?:abstract\s+|final\s+)?class\s+\w+\s+extends\s+\w*Page.*)/m';
 
     public function __construct() {
         parent::__construct();
@@ -347,48 +344,20 @@ class AutoPageClassAnnotations extends WireData implements Module {
     }
 
     /**
-     * Insert new annotations at the appropriate location in the file
-     * @param string $content                Original file content
+     * Insert new annotations immediately before the Page class declaration
+     * @param string $content                Original file content  
      * @param string $annotationsWithWrapper Annotation block to insert
-     * @return string Updated content with annotations
+     * @return string Updated content with annotations, or original content if no Page class found
      */
     private function insertNewAnnotations(string $content, string $annotationsWithWrapper): string {
-        // Case 1: File with both strict types AND namespace (complete format)
-        if (preg_match('/declare\(strict_types=1\)/', $content) && preg_match(self::REGEX_NAMESPACE, $content)) {
-            $replacement = "namespace ProcessWire;\n\n".$annotationsWithWrapper."\n\n";
-
-            return preg_replace(self::REGEX_NAMESPACE, $replacement, $content, 1) ?? $content;
+        // Find class extending *Page and insert annotations immediately before it
+        // Matches: (optional abstract/final) class SomeName extends SomePage/Page { 
+        if (preg_match(self::REGEX_PAGE_CLASS, $content)) {
+            $replacement = '$1' . $annotationsWithWrapper . "\n\n" . '$1$2';
+            return preg_replace(self::REGEX_PAGE_CLASS, $replacement, $content, 1) ?? $content;
         }
-
-        // Case 2: File with namespace only (most common)
-        if (preg_match(self::REGEX_NAMESPACE, $content)) {
-            $replacement = "namespace ProcessWire;\n\n".$annotationsWithWrapper."\n\n";
-
-            return preg_replace(self::REGEX_NAMESPACE, $replacement, $content, 1) ?? $content;
-        }
-
-        // Case 3: File without namespace but with strict types
-        if (preg_match(self::REGEX_STRICT_TYPES, $content)) {
-            $replacement = '$1'.$annotationsWithWrapper."\n\n";
-
-            return preg_replace(self::REGEX_STRICT_TYPES, $replacement, $content, 1) ?? $content;
-        }
-
-        // Case 4: Simple file starting with <?php (no namespace, no strict types)
-        if (preg_match(self::REGEX_PHP_OPENING, $content)) {
-            $replacement = '$1'.$annotationsWithWrapper."\n\n".'$2';
-
-            return preg_replace(self::REGEX_PHP_OPENING, $replacement, $content, 1) ?? $content;
-        }
-
-        // Fallback: Insert after <?php tag if found
-        if (preg_match(self::REGEX_PHP_FALLBACK, $content)) {
-            $replacement = '$1'."\n\n".$annotationsWithWrapper."\n\n";
-
-            return preg_replace(self::REGEX_PHP_FALLBACK, $replacement, $content, 1) ?? $content;
-        }
-
-        // If no <?php tag found, return original content to avoid corruption
+        
+        // If no Page class found, return original content unchanged
         return $content;
     }
 
