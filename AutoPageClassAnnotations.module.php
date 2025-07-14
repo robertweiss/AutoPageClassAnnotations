@@ -4,12 +4,12 @@ class AutoPageClassAnnotations extends WireData implements Module {
     /**
      * Module information
      */
-    public static function getModuleInfo() {
+    public static function getModuleInfo(): array {
         return [
             'title' => 'Auto Page Class Annotations',
             'summary' =>
                 'Automatically adds PHPDoc Annotations for custom page classes when fields or fieldgroups are saved. Heavily based on AutoTemplateStubs by Robin Sallis',
-            'version' => '0.0.1',
+            'version' => '0.0.2',
             'author' => 'Robert Weiss',
             'href' => '',
             'icon' => 'code',
@@ -21,8 +21,9 @@ class AutoPageClassAnnotations extends WireData implements Module {
 
     /**
      * Skip these fieldtypes because they aren't usable within a template file
+     * @var array<string>
      */
-    public $skipFieldtypes = [
+    public array $skipFieldtypes = [
         'FieldtypeFieldsetOpen',
         'FieldtypeFieldsetTabOpen',
         'FieldtypeFieldsetGroup',
@@ -31,14 +32,30 @@ class AutoPageClassAnnotations extends WireData implements Module {
 
     /**
      * Skip these system templates
+     * @var array<string>
      */
-    public $skipTemplates = ['admin', 'form-builder', 'language', 'permission', 'role'];
+    public array $skipTemplates = ['admin', 'form-builder', 'language', 'permission', 'role'];
+
+    /**
+     * Constants for file timing checks and annotation markers
+     */
+    private const REPEATER_MATRIX_FILE_TIME_THRESHOLD = 3;
+    private const ANNOTATION_MARKER = '@AutoPageClassAnnotations';
+
+    /**
+     * Regex patterns for annotation insertion
+     */
+    private const REGEX_EXISTING_ANNOTATIONS = '/\/\*\* @AutoPageClassAnnotations[\s\S]*? \* @AutoPageClassAnnotations \*\//';
+    private const REGEX_NAMESPACE = '/namespace ProcessWire;\s*\n+/';
+    private const REGEX_STRICT_TYPES = '/(<\?php\s+declare\(strict_types=1\);\s*\n+)/';
+    private const REGEX_PHP_OPENING = '/(<\?php\s*\n+)(.*)/s';
+    private const REGEX_PHP_FALLBACK = '/(<\?php\s*)/';
 
     public function __construct() {
         parent::__construct();
     }
 
-    public function ready() {
+    public function ready(): void {
         $this->addHookAfter('Fields::save', $this, 'fieldSaved');
         $this->addHookAfter('Templates::save', $this, 'templateSaved');
         $this->addHookAfter('Fields::saveFieldgroupContext', $this, 'fieldContextSaved');
@@ -58,12 +75,9 @@ class AutoPageClassAnnotations extends WireData implements Module {
             'FieldtypeDatetime' => 'int|string',
             'FieldtypeEmail' => 'string',
             'FieldtypeFieldsetPage' => function (Field $field) {
-                if ($this->custom_page_class_compatible) {
-                    $class_name = ucfirst($this->wire()->sanitizer->camelCase($field->name)) . 'Page';
-                    return "FieldsetPage|Repeater{$class_name}";
-                } else {
-                    return "FieldsetPage|{$this->class_prefix}repeater_{$field->name}";
-                }
+                $class_name = ucfirst($this->wire()->sanitizer->camelCase($field->name)).'Page';
+
+                return "FieldsetPage|Repeater{$class_name}";
             },
             'FieldtypeFile' => function (Field $field) {
                 switch ($field->outputFormat) {
@@ -131,7 +145,7 @@ class AutoPageClassAnnotations extends WireData implements Module {
         ];
     }
 
-    protected function fieldSaved(HookEvent $event) {
+    protected function fieldSaved(HookEvent $event): void {
         $field = $event->arguments(0);
         if (in_array((string) $field->type, $this->skipFieldtypes)) {
             return;
@@ -141,7 +155,7 @@ class AutoPageClassAnnotations extends WireData implements Module {
         }
     }
 
-    protected function templateSaved(HookEvent $event) {
+    protected function templateSaved(HookEvent $event): void {
         $template = $event->arguments(0);
         if (in_array($template->name, $this->skipTemplates)) {
             return;
@@ -149,7 +163,7 @@ class AutoPageClassAnnotations extends WireData implements Module {
         $this->generatePageClassAnnotation($template);
     }
 
-    protected function fieldContextSaved(HookEvent $event) {
+    protected function fieldContextSaved(HookEvent $event): void {
         $fieldgroup = $event->arguments(1);
         foreach ($fieldgroup->getTemplates() as $template) {
             if (in_array($template->name, $this->skipTemplates)) {
@@ -159,7 +173,7 @@ class AutoPageClassAnnotations extends WireData implements Module {
         }
     }
 
-    protected function fieldgroupSaved(HookEvent $event) {
+    protected function fieldgroupSaved(HookEvent $event): void {
         $fieldgroup = $event->arguments(0);
         foreach ($fieldgroup->getTemplates() as $template) {
             if (in_array($template->name, $this->skipTemplates)) {
@@ -169,14 +183,19 @@ class AutoPageClassAnnotations extends WireData implements Module {
         }
     }
 
-    protected function getFieldInfo(Field $field, Template $template = null) {
+    /**
+     * Build annotation information for a field
+     * @param Field         $field    The field to analyze
+     * @param Template|null $template Template context for field
+     * @return array{label: string, returns: string} Field annotation data
+     */
+    protected function buildFieldAnnotation(Field $field, ?Template $template = null): array {
         // If Combo field then create ComboValue class stub for the field
-        if ($field instanceof ComboField) {
-            /** @var ComboField $field */
+        if (class_exists('ComboField') && $field instanceof ComboField) {
             $settings = $field->getComboSettings();
             $phpdoc = $settings->toPhpDoc(false, true);
             $className = "ComboValue_{$field->name}";
-            $this->wire()->files->filePutContents(config()->paths()->classes . "$className.php", $phpdoc);
+            $this->wire()->files->filePutContents($this->wire()->config->paths()->classes."$className.php", $phpdoc);
         }
 
         if ($template) {
@@ -218,7 +237,7 @@ class AutoPageClassAnnotations extends WireData implements Module {
             if (in_array((string) $field->type, $this->skipFieldtypes)) {
                 continue;
             }
-            $fieldInfo = $this->getFieldInfo($field, $template);
+            $fieldInfo = $this->buildFieldAnnotation($field, $template);
             $annotations .= "\n * @property {$fieldInfo['returns']} \${$field->name} {$fieldInfo['label']}";
             // Sneaky way to check if the template is of base class RepeaterMatrix:
             // check if it has a field named repeater_matrix_type
@@ -229,55 +248,151 @@ class AutoPageClassAnnotations extends WireData implements Module {
         }
         $annotations .= "\n *";
 
-        $filePath = config()->paths()->classes . $className . '.php';
+        $filePath = $this->wire()->config->paths()->classes.$className.'.php';
         if (!is_file($filePath) || $this->wire()->files->fileGetContents($filePath) === '') {
             $this->createPageClassFile($className, $template);
-        } elseif ($isRepeaterMatrixPage && time() - filectime($filePath <= 3)) {
+        } elseif ($isRepeaterMatrixPage && is_file($filePath) && time() - filectime($filePath) <= self::REPEATER_MATRIX_FILE_TIME_THRESHOLD) {
             // If the pageClass is a RepeaterMatrix and the file was touched in the last three seconds,
             // we assume that it was created and has a wrong page class as we did not know if it was
             // a RepeaterPage or a RepeaterMatrixPage when creating it. We fix this now
             $fileContent = $this->wire()->files->fileGetContents($filePath);
-            $fileContent = str_replace(' extends RepeaterPage ', ' extends RepeaterMatrixPage ', $fileContent);
-            $this->wire()->files->filePutContents($filePath, $fileContent);
+            if ($fileContent !== false) {
+                $fileContent = str_replace(' extends RepeaterPage ', ' extends RepeaterMatrixPage ', $fileContent);
+                $this->wire()->files->filePutContents($filePath, $fileContent);
+            }
         }
 
         $fileContent = $this->wire()->files->fileGetContents($filePath);
-        $fileContent = $this->setNewAnnotations($fileContent, $annotations);
-        $this->wire()->files->filePutContents($filePath, $fileContent);
+        if ($fileContent !== false) {
+            $updatedContent = $this->insertOrUpdateAnnotations($fileContent, $annotations);
+            $this->wire()->files->filePutContents($filePath, $updatedContent);
+        }
     }
 
     protected function createPageClassFile(string $className, Template $template): void {
-        $filePath = config()->paths()->classes . $className . '.php';
-        $fileContent = "<?php";
-        $fileContent.= (!str_contains($className, 'Rockpagebuilder')) ? " namespace ProcessWire;\n\n" : "\n\n";
+        $filePath = $this->wire()->config->paths()->classes.$className.'.php';
+
+        // Validate className is not empty
+        if (empty($className)) {
+            return;
+        }
+
+        $fileContent = "<?php ";
+        $useStrictPreamble = (bool)($this->wire()->config->AutoPageClassAnnotationsStrictPreamble ?? false);
+        if ($useStrictPreamble) {
+            $fileContent .= "declare(strict_types=1);\n\n";
+        }
+
+        // Only add namespace if not Rockpagebuilder class
+        $fileContent .= (!str_contains($className, 'Rockpagebuilder')) ? "namespace ProcessWire;\n\n" : "\n\n";
+
+        // Set classname this class is extending on
         $baseClassName = 'Page';
-        if ($template->pageClass !== '') {
+        if (!empty($template->pageClass)) {
             $baseClassName = $template->pageClass;
         }
         if (explode('_', $template->name)[0] === 'repeater') {
             $baseClassName = 'RepeaterPage';
         }
+
+        // Class declaration line
         $fileContent .= 'class ' . $className . ' extends ' . $baseClassName . ' {}';
         $this->wire()->files->filePutContents($filePath, $fileContent);
     }
 
-    protected function setNewAnnotations($oldContent, $annotations) {
-        // Set wrapper around annotations
-        $annotationsWithWrapper =
-            '/** @AutoPageClassAnnotations' . "\n" . $annotations . "\n" . ' * @AutoPageClassAnnotations */';
-        // Find existing auto annotations wrapper
-        $regex = '/\/\*\* @AutoPageClassAnnotations[\s\S]*? \* @AutoPageClassAnnotations \*\//';
-        // If not existing, find namespace line instead and append wrapper with annotations
-        if (!preg_match($regex, $oldContent)) {
-            $regex = '/namespace ProcessWire;\R+/';
-            $annotationsWithWrapper = "namespace ProcessWire;\n\n" . $annotationsWithWrapper . "\n\n";
-        }
-        $newContent = preg_replace($regex, $annotationsWithWrapper, $oldContent, 1);
+    /**
+     * Replace or insert PHPDoc annotations in page class file content
+     * @param string $oldContent  Original file content
+     * @param string $annotations Annotation content to insert
+     * @return string Modified file content
+     */
+    protected function insertOrUpdateAnnotations(string $oldContent, string $annotations): string {
+        $annotationsWithWrapper = $this->buildAnnotationWrapper($annotations);
 
-        return $newContent;
+        // First, try to replace existing annotations
+        if ($this->hasExistingAnnotations($oldContent)) {
+            return $this->replaceExistingAnnotations($oldContent, $annotationsWithWrapper);
+        }
+
+        // No existing annotations found, insert new ones at appropriate location
+        return $this->insertNewAnnotations($oldContent, $annotationsWithWrapper);
     }
 
-    protected function generateAllPageClassAnnotations() {
+    /**
+     * Build the complete annotation wrapper with markers
+     * @param string $annotations The annotation content
+     * @return string Complete annotation block
+     */
+    private function buildAnnotationWrapper(string $annotations): string {
+        return '/** '.self::ANNOTATION_MARKER."\n".$annotations."\n".' * '.self::ANNOTATION_MARKER.' */';
+    }
+
+    /**
+     * Check if file content already has existing annotations
+     * @param string $content File content to check
+     * @return bool True if annotations exist
+     */
+    private function hasExistingAnnotations(string $content): bool {
+        return preg_match(self::REGEX_EXISTING_ANNOTATIONS, $content) === 1;
+    }
+
+    /**
+     * Replace existing annotation block with new content
+     * @param string $content                Original content
+     * @param string $annotationsWithWrapper New annotation block
+     * @return string Updated content
+     */
+    private function replaceExistingAnnotations(string $content, string $annotationsWithWrapper): string {
+        return preg_replace(self::REGEX_EXISTING_ANNOTATIONS, $annotationsWithWrapper, $content, 1) ?? $content;
+    }
+
+    /**
+     * Insert new annotations at the appropriate location in the file
+     * @param string $content                Original file content
+     * @param string $annotationsWithWrapper Annotation block to insert
+     * @return string Updated content with annotations
+     */
+    private function insertNewAnnotations(string $content, string $annotationsWithWrapper): string {
+        // Case 1: File with both strict types AND namespace (complete format)
+        if (preg_match('/declare\(strict_types=1\)/', $content) && preg_match(self::REGEX_NAMESPACE, $content)) {
+            $replacement = "namespace ProcessWire;\n\n".$annotationsWithWrapper."\n\n";
+
+            return preg_replace(self::REGEX_NAMESPACE, $replacement, $content, 1) ?? $content;
+        }
+
+        // Case 2: File with namespace only (most common)
+        if (preg_match(self::REGEX_NAMESPACE, $content)) {
+            $replacement = "namespace ProcessWire;\n\n".$annotationsWithWrapper."\n\n";
+
+            return preg_replace(self::REGEX_NAMESPACE, $replacement, $content, 1) ?? $content;
+        }
+
+        // Case 3: File without namespace but with strict types
+        if (preg_match(self::REGEX_STRICT_TYPES, $content)) {
+            $replacement = '$1'.$annotationsWithWrapper."\n\n";
+
+            return preg_replace(self::REGEX_STRICT_TYPES, $replacement, $content, 1) ?? $content;
+        }
+
+        // Case 4: Simple file starting with <?php (no namespace, no strict types)
+        if (preg_match(self::REGEX_PHP_OPENING, $content)) {
+            $replacement = '$1'.$annotationsWithWrapper."\n\n".'$2';
+
+            return preg_replace(self::REGEX_PHP_OPENING, $replacement, $content, 1) ?? $content;
+        }
+
+        // Fallback: Insert after <?php tag if found
+        if (preg_match(self::REGEX_PHP_FALLBACK, $content)) {
+            $replacement = '$1'."\n\n".$annotationsWithWrapper."\n\n";
+
+            return preg_replace(self::REGEX_PHP_FALLBACK, $replacement, $content, 1) ?? $content;
+        }
+
+        // If no <?php tag found, return original content to avoid corruption
+        return $content;
+    }
+
+    protected function generateAllPageClassAnnotations(): void {
         foreach ($this->wire()->templates as $template) {
             if (in_array($template->name, $this->skipTemplates)) {
                 continue;
@@ -286,7 +401,7 @@ class AutoPageClassAnnotations extends WireData implements Module {
         }
     }
 
-    public function ___install() {
+    public function ___install(): void {
         $this->generateAllPageClassAnnotations();
     }
 }
